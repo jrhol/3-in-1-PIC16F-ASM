@@ -1,0 +1,2032 @@
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ; operating BUILD CONFIGURATIONS drop down menu in the DEBUG toolbar
+                      00002 ; FOR SIMULATIONS with MPLAB SIM: select "Debug" this will switch off delays that take thousands of inst
+                            ructions
+                      00003 ; HARDWARE: select "Release" all delays will be on
+                      00004 
+                      00005 ; Provided code - do not edit  
+                      00006 ; This include setups up various configuration bits for the microcontroller
+                      00007 ; we are using, and importantly reserves space for variables.
+                      00008 ; If you need to use more variables, please place them in VAR.INC, which you
+                      00009 ; can find under the "Header Files" folder. The variables listed there will be
+                      00010 ; placed in the first memory bank.
+                      00011 ; This code has been provided for you to simplify your work, but you should be
+                      00012 ; aware that you cannot ignore it.
+                      00013 #include        ECH_1.inc
+                      00001 
+                      00002 ; ECH_1.inc - to be put before your SUBROUTINES         
+                      00003 
+                      00004 
+                      00005 ; DEFINITIONS related to the PIC and board used
+                      00006 ; DO NOT EDIT ! ! !
+                      00007 
+                      00008 
+                      00009 ; this #include enables use of register and bit names from the datasheet
+                      00010 ; consists of 
+                      00011 ; SymbolicName EQU NumericalValue   ; equates symbolic names to appropriate bit patterns
+                      00012 #include <p16F887.inc>
+                      00001         LIST
+                      00002 
+                      00003 ;==========================================================================
+                      00004 ; Build date : Jan 06 2020
+                      00005 ;  MPASM PIC16F887 processor include
+                      00006 ; 
+                      00007 ;  (c) Copyright 1999-2020 Microchip Technology, All rights reserved
+                      00008 ;==========================================================================
+                      00009 
+                      00810         LIST
+                      00013 ; ! the name of the file should match the PIC microcontroller part name
+                      00014 
+                      00015 
+                      00016 ; setting the CONFIG1 configuration bits - required, explained at the end of the lecture course
+2007   00A4           00017         __CONFIG        _CONFIG1, _INTOSCIO & _WDT_OFF & _PWRTE_ON & _MCLRE_ON & _CP_ON & _CPD_OFF & _BO
+                            R_OFF & _IESO_OFF & _FCMEN_OFF & _LVP_OFF & _DEBUG_ON
+                      00018 ;       configuration bits from the original Microchip code
+                      00019 ;       __CONFIG    _CONFIG1, _LVP_OFF & _FCMEN_OFF & _IESO_OFF & _BOR_OFF & _CPD_OFF & _CP_OFF & _MCLRE
+                            _OFF & _PWRTE_ON & _WDT_OFF & _INTRC_OSC_NOCLKOUT
+                      00020 ;
+                      00021 ; _INTOSCIO - use internal 4 MHz oscillator, RA6 and RA7 pins are used for I/O
+                      00022 ; _WDT_OFF - the watchdog timer is DISABLED and can be enabled by SWDTEN bit of the WDTCON register
+                      00023 ; _PWRTE_ON - power up timer - ENABLED
+                      00024 ; _MCLRE_ON - master clear pin function - ENABLED
+                      00025 ; _CP_OFF - program memory protection - DISABLED
+                      00026 ; _CPD_OFF - EEPROM protection - DISABLED
+                      00027 ; _BOR_OFF - brown out reset - DISABLED
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00028 ; _IESO_OFF - internal external oscillator switchover - DISABLED
+                      00029 ; _FCMEN_OFF - fail safe clock monitor - DISABLED
+                      00030 ; _LVP_OFF - low voltage programming - DISABLED
+                      00031 ; _DEBUG_ON - in circuit debugger - ENABLED, pins RB6 and RB7 are used by it
+                      00032 ; (these and all the other available options are specified in the p16F887.inc file
+                      00033 ; ! the best practice is to ALWAYS specify all the bits in the code
+                      00034 
+                      00035 ; setting the CONFIG2 configuration bits - required, explained at the end of the lecture course
+2008   3EFF           00036         __CONFIG        _CONFIG2, _WRT_OFF & _BOR21V
+                      00037 ;       as in the Microchip original code
+                      00038 ;
+                      00039 ; _WRT_OFF - program memory self write function - OFF
+                      00040 ; _BOR21V - brown out reset voltage set to 2.1 V (this feature is disabled anyway in CONFIG1 above)
+                      00041 
+                      00042 
+                      00043 #include                ECH_EQU.inc     ; for EQU statements related to the 44 pin demo board wiring of 
+                            PORTD and RB0
+                      00001 ;       symbolic name for the port connected to LEDs (PORTD)
+  00000008            00002 LEDs    EQU             PORTD
+                      00003 ;       symbolic names for individual LEDs for BSF and BCF
+  00000000            00004 LD0             EQU             0
+  00000001            00005 LD1             EQU             1
+  00000002            00006 LD2             EQU             2
+  00000003            00007 LD3             EQU             3
+  00000004            00008 LD4             EQU             4
+  00000005            00009 LD5             EQU             5
+  00000006            00010 LD6             EQU             6
+  00000007            00011 LD7             EQU             7
+                      00012 ;
+                      00013 ; e.g.  BSF             LEDs, LD3       ; to switch LD3 on
+                      00014 ;               BCF             LEDs, LD5       ; to switch LD5 off
+                      00015 
+                      00016 ; use the following macros to test the switch
+                      00017 #define skipRel         btfss PORTB,RB0 ; skip the next instruction if button is released
+                      00018 #define skipPre         btfsc PORTB,RB0 ; skip the next instruction if the button is pressed
+                      00044 
+                      00045 
+                      00046 ; ALLOCATION of user RAM, starts where SFRs end at 0x20
+                      00047 gr1             udata           ; GPRs for bank 1                                                       
+                      00048                 include         VAR.inc         ; YOUR VARIABLES from this file
+                      00001 ; list names of your variables one in a row below
+                      00002 ; each of them will be allocated a GPR
+                      00003 ; and can be referenced by name in your code
+                      00004 ; (the assembler will place actual address automatically)
+                      00005 ; examples:
+                      00006 ;Ctr1   RES     1       ; your vaiable, e.g., for counter 1
+                      00007 ;Ctr2   RES     1
+0000                  00008 Temp    Res     1       ; this is used by the examples
+0001                  00009 A               Res     1
+0002                  00010 Bop             Res     1
+                      00011 
+0003                  00012 ConfigMode      Res     1
+0004                  00013 ModeSelect      Res     1
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00014                 
+0005                  00015 VariablePWMInitComplete     Res 1               
+0006                  00016 VariablePWMConfig1  Res 1
+0007                  00017 SpeedSelectPWM      Res 1
+0008                  00018 VariablePWMConfig2  Res 1
+0009                  00019 Brightness1         Res 1
+000A                  00020 VariablePWMConfig3  Res 1
+000B                  00021 Brightness2         Res 1
+000C                  00022 LoopCountdown       Res 1
+000D                  00023 LoopCountup         Res 1
+                      00024 
+000E                  00025 StrobeInitComplete  Res 1
+000F                  00026 count               Res 1                   
+0010                  00027 led_pattern         Res 1
+0011                  00028 SidetoSideConfig1   Res 1
+0012                  00029 speedSelect         Res 1
+0013                  00030 SidetoSideConfig2   Res 1
+0014                  00031 direction_select    Res 1
+0015                  00032 current_direction   Res 1
+                      00033                 
+0016                  00034 LinearFeedbackInitComplete Res 1 
+0017                  00035 LFSR_reg            Res 1
+0018                  00036 poly                Res 1
+0019                  00037 LinearFeedbackConfig1   Res 1
+001A                  00038 LSFR_time   Res 1
+001B                  00039 LFSR_regtemp    Res 1
+                      00040    
+                      00041 
+                      00042 
+                      00049                 include         ECH_VAR.inc     ; variables required for subroutines
+                      00001 ; ECH_VAR.INC - declaration of variables used in the AK subroutines
+                      00002 
+001C                  00003 D_Ctr1  RES     1       ; could be more than 1 byte, e.g., for int or float
+001D                  00004 D_Ctr2  RES     1       ; 1 byte (one GPR) is reserved here and below
+001E                  00005 D_Ctr3  RES     1
+001F                  00006 R_Old   RES     1
+0020                  00007 S_Tmp           RES     1       ; scratch pad registers
+0021                  00008 S_Tmp1  RES     1
+                      00009 ; the above variables could be named like Tmp1 Tmp2 etc, and used in
+                      00010 ; the rest of the program if necessary to save RAM (not in the ISR though)
+                      00050 gr2             udata           ; GPRs for bank 2 - none used
+                      00051 ; GPRs for banks 3 and 4 can be defined as above
+                      00052 gr3             udata_shr       ; these variables will be put to the RAM shared among all the banks (las
+                            t 16 GPRs)      
+0000                  00053 W_TMP   RES             1
+0001                  00054 ST_TMP  RES             1
+                      00055 
+                      00056 
+                      00057 ; CODE sections at different addresses
+                      00058                 ; entry on reset - address 0x0 is fixed by PIC architecture
+                      00059 V_RES   CODE    0x0
+0000   30??           00060                 MOVLW   HIGH(Main)
+0001   008A           00061             MOVWF   PCLATH
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0002   2???           00062                 goto    Main
+                      00063                 ; entry on interrupt - address 0x4 fixed by PIC architecture
+                      00064 V_INT   CODE    0x4
+0004   2???           00065                 goto    ISR
+                      00066                 CODE    ; conventional placement of subroutines - before the INITIALISATION
+                      00067 
+                      00068 
+                      00069 ; subroutines prepared for the coursework
+                      00070                 include ECH_SUB.INC
+                      00001 ; DO NOT EDIT ! ! !
+                      00002 
+                      00003 ; ECH_SUB.INC - subroutines supplied for
+                      00004 ; delay for 1 ms  (Del_ms)
+                      00005 ; delay for 1 ms  times W (DelWms)
+                      00006 ; delay for 0.1 s times W (DelWds)
+                      00007 
+                      00008 
+                      00009 #ifdef __DDEBUG         ; to facilitate in-circuit debugging -
+                      00010                                 ; all delay subroutines return immediately as below
+                      00011 
+                      00012 Del_ms  return
+                      00013 DelWms  return
+                      00014 DelWds  return
+                      00015 Del_100us       return
+                      00016 
+                      00017 #else                   ; this is the code to provide the delays
+                      00018 
+                      00019 ; precise delay for 100 us
+                      00020 ; uses  D_Ctr1
+                      00021 ; calls nothing         
+0000                  00022 Del_100us
+0000   301F           00023                 movlw   D'31'
+0001   00??           00024                 movwf   D_Ctr1
+Message[305]: Using default destination of 1 (file).
+0002   0B??           00025 D_L4    decfsz  D_Ctr1
+0003   2???           00026                 goto    D_L4
+0004   0000           00027                 nop
+0005   0000           00028                 nop
+0006   0008           00029                 return
+                      00030 ; precise delay for 1 ms
+                      00031 ; uses  D_Ctr1
+                      00032 ; calls nothing 
+0007   30F8           00033 Del_ms  movlw   D'248'  ; value tuned at the debug stage
+0008   00??           00034                 movwf   D_Ctr1
+0009   0000           00035 D_L1    nop
+000A   0B??           00036                 decfsz  D_Ctr1, F
+000B   2???           00037                 goto    D_L1
+000C   0000           00038                 nop
+000D   0000           00039                 nop
+000E   0000           00040                 nop
+000F   0008           00041                 return
+                      00042 ; not precise but approximate delay for W times 1 ms
+                      00043 ; uses  D_Ctr2
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00044 ; calls Del_ms 
+0010   00??           00045 DelWms  movwf   D_Ctr2
+0011   2???           00046 D_L2    call    Del_ms
+0012   0B??           00047                 decfsz  D_Ctr2, F
+0013   2???           00048                 goto    D_L2
+0014   0008           00049                 return
+                      00050 ; not precise but approximate delay for W times 1 ds (0.1 s)
+                      00051 ; uses  D_Ctr3
+                      00052 ; calls DelWms 
+0015   00??           00053 DelWds  movwf   D_Ctr3
+0016   3064           00054 D_L3    movlw   D'100'
+0017   2???           00055                 call    DelWms
+0018   0B??           00056                 decfsz  D_Ctr3, F
+0019   2???           00057                 goto    D_L3
+001A   0008           00058                 return
+                      00059 
+                      00060 #endif
+                      00061 
+                      00062 
+                      00063 ; reading the ADC with the delay for conversion
+001B   149F           00064 ReadADC bsf             ADCON0, GO_DONE         ; strat the conversion
+001C   1C9F           00065 RADC1   btfss   ADCON0, GO_DONE         ; test the DONE bit
+001D   2???           00066                 goto    RADC1                           ; if not set, test again
+001E   081E           00067                 movfw   ADRESH                          ; data ready => copy to W
+001F   0008           00068                 return
+                      00069 
+                      00070 ; de-bouncing switches using a delay for 20 ms
+                      00071 ; uses  R_Old
+                      00072 ; calls DelWms 
+0020                  00073 DeBounce
+0020   0806           00074                 movfw   PORTB                   ; copy SwPort to W
+0021   3901           00075                 andlw   B'00000001'             ; mask unused bits (one bit is in use only)
+0022   00??           00076                 movwf   R_Old                   ; save data to a work register
+0023   3014           00077                 movlw   D'20'
+0024   2???           00078                 call    DelWms                  ; wait for 20 ms and read again
+0025   0806           00079                 movfw   PORTB
+0026   3901           00080                 andlw   B'00000001'             
+0027   06??           00081                 xorwf   R_Old,W                 ; compare with the old value
+0028   1D03           00082                 btfss   STATUS,Z
+0029   2???           00083                 goto    DeBounce                ; if the value changed - do again
+002A   08??           00084                 movfw   R_Old                   ; reading is stable => return it
+002B   0008           00085                 return
+                      00086 
+                      00087 
+                      00088 ; selecting one option out of four
+                      00089 ; rotate the potentiometer to have the right LED on 
+                      00090 ; then press the button to confirm
+                      00091 ; LD4 is used to show that potentiometer input is on
+002C                  00092 Select4
+002C   0808           00093                 movfw   LEDs
+002D   00??           00094                 movwf   S_Tmp1          ; LEDs -> Tmp1 to restore later
+                      00095 
+002E   0188           00096 Sel4Rd  clrf    LEDs
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+002F   08??           00097                 movfw   S_Tmp1
+0030   39C0           00098                 andlw   B'11000000'
+0031   0088           00099                 movwf   LEDs            ; restore 3 MSB of LEDs
+0032   1608           00100                 bsf             LEDs,LD4        ; indicator on
+                      00101 
+                      00102 ;               get the two MSBs of the ADC value
+0033   2???           00103                 call    ReadADC
+0034   39C0           00104                 andlw   B'11000000'     ; mask unused bits
+0035   00??           00105                 movwf   S_Tmp                   ; copy MSBs only
+                      00106 
+                      00107 ;               analyse two MSBs of the ADC value
+0036   1B80           00108                 btfsc   S_Tmp, D'7'     ; test bit 7
+0037   2???           00109                 goto    SelMSB1
+0038   1B00           00110                 btfsc   S_Tmp, D'6'     ; test bit 6
+0039   2???           00111                 goto    Sel1
+                      00112 
+003A   1408           00113 Sel0    bsf             LEDs, LD0       ; bits were 00
+003B   3001           00114                 movlw   B'00000001'     ; choice 0 selected
+003C   2???           00115                 goto    SelBut
+                      00116                         
+003D   1488           00117 Sel1    bsf             LEDs, LD1       ; bits were 01
+003E   3002           00118                 movlw   B'00000010'     ; choice 1 selected
+003F   2???           00119                 goto    SelBut
+                      00120 
+0040                  00121 SelMSB1                                         ; bit 7 was 1, test bit 6
+0040   1B00           00122                 btfsc   S_Tmp, D'6'
+0041   2???           00123                 goto    Sel3
+                      00124 
+0042   1508           00125 Sel2    bsf             LEDs, LD2       ; bits were 10
+0043   3004           00126                 movlw   B'00000100'     ; choice 2 selected
+0044   2???           00127                 goto    SelBut
+                      00128 
+0045   1588           00129 Sel3    bsf             LEDs, LD3       ; bits were 11
+0046   3008           00130                 movlw   B'00001000'     ; choice 1 selected
+                      00131 
+0047   00??           00132 SelBut  movwf   S_Tmp                   ; W is used in DeBounce
+0048   2???           00133                 call    DeBounce
+0049   1806           00134                 skipPre
+004A   2???           00135                 goto    Sel4Rd          ; no confirmation - start again
+                      00136 
+004B   0188           00137                 clrf    LEDs            ; blink the selection
+004C   3003           00138                 movlw   3
+004D   2???           00139                 call    DelWds
+004E   08??           00140                 movfw   S_Tmp
+004F   0088           00141                 movwf   LEDs
+0050   3004           00142                 movlw   4
+0051   2???           00143                 call    DelWds
+0052   0188           00144                 clrf    LEDs
+0053   3003           00145                 movlw   3
+0054   2???           00146                 call    DelWds
+                      00147 
+0055   08??           00148                 movfw   S_Tmp1
+0056   0088           00149                 movwf   LEDs            ; Tmp1 -> LEDs restore before return
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00150 
+0057   08??           00151                 movfw   S_Tmp                   ; return Sel4 in W
+                      00152 
+0058   0008           00153                 return
+                      00154 
+                      00155 ; selecting 2 bit binary value
+                      00156 ; rotate the potentiometer to have the right LED on 
+                      00157 ; then press the button to confirm
+                      00158 ; LD4 is used to show that potentiometer input is on
+0059                  00159 SelectB
+0059   0808           00160                 movfw   LEDs
+005A   00??           00161                 movwf   S_Tmp1          ; LEDs -> Tmp1 to restore later
+                      00162 
+005B   0188           00163 SelBRd  clrf    LEDs
+005C   08??           00164                 movfw   S_Tmp1
+005D   39C0           00165                 andlw   B'11000000'
+005E   0088           00166                 movwf   LEDs            ; restore 3 MSB of LEDs
+005F   1608           00167                 bsf             LEDs,LD4        ; indicator on
+                      00168 
+                      00169 ;               get the two MSBs of the ADC value
+0060   2???           00170 SelL2   call    ReadADC
+0061   39C0           00171                 andlw   B'11000000'     ; mask unused bits
+0062   00??           00172                 movwf   S_Tmp                   ; copy MSBs only
+                      00173 
+                      00174 ;               rotate MSBs to LSBs
+0063   1003           00175                 bcf             STATUS, C       ; clear carry flag as it is used for rotation
+0064   0C??           00176                 rrf             S_Tmp, F
+0065   0C??           00177                 rrf             S_Tmp, F
+0066   0C??           00178                 rrf             S_Tmp, F
+0067   0C??           00179                 rrf             S_Tmp, F
+0068   0C??           00180                 rrf             S_Tmp, F
+0069   0C??           00181                 rrf             S_Tmp, F
+                      00182 
+006A   0808           00183                 movfw   LEDs
+006B   39FC           00184                 andlw   B'11111100'
+006C   04??           00185                 iorwf   S_Tmp,W
+006D   0088           00186                 movwf   LEDs
+                      00187 
+006E   2???           00188                 call    DeBounce
+006F   1806           00189                 skipPre
+0070   2???           00190                 goto    SelBRd          ; loop here until the button is pressed 
+                      00191 
+0071   0188           00192                 clrf    LEDs            ; blink the result
+0072   3003           00193                 movlw   3
+0073   2???           00194                 call    DelWds
+0074   08??           00195                 movfw   S_Tmp
+0075   0088           00196                 movwf   LEDs
+0076   3004           00197                 movlw   4
+0077   2???           00198                 call    DelWds
+0078   0188           00199                 clrf    LEDs
+0079   3003           00200                 movlw   3
+007A   2???           00201                 call    DelWds
+                      00202 
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+007B   08??           00203                 movfw   S_Tmp1
+007C   0088           00204                 movwf   LEDs            ; Tmp1 -> LEDs restore before return
+                      00205 
+007D   08??           00206                 movfw   S_Tmp                   ; return Sel4 in W
+                      00207 
+007E   0008           00208                 return
+                      00209                 
+                      00071 
+                      00014                 
+                      00015 
+                      00016 ; Place your SUBROUTINE(S) (if any) here ...  
+                      00017 ;{ 
+                      00018 ISR     CODE    H'20'
+0020                  00019 ISR                                     ;ISR called when Button is pressed (INT)
+0020   3001           00020         movlw   d'1'    ;Sets Config mode to 1 for each mode
+0021   00??           00021         movwf   ConfigMode      ;Each Mode will call specific config mode depending on which mode is cur
+                            rently active
+0022   108B           00022         bcf     INTCON, INTF ; Clear INT flag once intterupt serviced
+0023   0009           00023         retfie  
+                      00024 ;} end of your subroutines
+                      00025         
+0024                  00026 SampleTime              ;Used for the ADC in the main loop
+0024   300A           00027         movlw d'10'     ;Delay of 10ms to allow ADC input to stablise
+0025   2???           00028         call DelWms
+Warning[203]: Found opcode in column 1. (return)
+0026   0008           00029 return
+                      00030 
+0027                  00031 VariablePWMInit         ;Initialisation function called when VariablePWM mode is selected
+                      00032         
+                      00033         ;clearing Values   
+0027   1683 1303      00034         banksel PIE1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0029   018C           00035         clrf PIE1
+                      00036     
+002A   1283 1303      00037         banksel CCP1CON
+002C   0197           00038         clrf CCP1CON
+                      00039     
+002D   1283 1303      00040         banksel TMR2
+002F   0191           00041         clrf TMR2
+                      00042         
+0030   1283 1303      00043         banksel LEDs
+0032   0188           00044         clrf LEDs
+                      00045         
+                      00046         ;Step 1 Set up Timer2 for PWM operation
+0033   1683 1303      00047         BANKSEL PR2                     ;Select bank 1 and PR2 register
+0035   3018           00048         MOVLW b'00011000'       ;Set the PR2 value for 10KHz PWM frequency
+                      00049                                                 ;See formula but this value needs to be 19
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0036   0092           00050         MOVWF PR2
+                      00051     
+                      00052         ;Step 2 Configure CCP module for PWM
+0037   1283 1303      00053         BANKSEL CCP1CON    ; Select bank 1 and CCP1CON register
+0039   300C           00054         movlw b'00001100'       ; 1100<3:0> is PWM active High on all PWM ports, 00<5:4> is our required
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                             Duty LSB, 01<7:6> is for setup
+003A   0097           00055         movwf CCP1CON           ;Note: Not useing the Duty Cycle LSB here so set to 00 and not changed.
+                      00056 
+                      00057     
+                      00058         ;Step 3
+                      00059         ;Set the initial duty cycle MSB
+003B   1283 1303      00060         BANKSEL CCPR1L     ; Select bank 1 and CCPR1L register
+003D   3000           00061         MOVLW b'00000000'  ; Clearing the Duty here as will be set in the main variable loop function
+003E   0095           00062         MOVWF CCPR1L
+                      00063         
+                      00064         
+                      00065         ;Step 4
+                      00066         ;Configure and start Timer 2 for 10KHz
+003F   1283 1303      00067         banksel PIR1
+0041   110C           00068         bcf    PIR1,2       ;Clearing the TMR2IF interrupt flag
+                      00069     
+0042   1283 1303      00070         BANKSEL T2CON       ; Select bank 0 and T2CON register
+0044   3005           00071         MOVLW b'00000101'   ; 1:1 Timer 2 Prescaler
+                      00072                                                 ; 1:4 postscaler
+                      00073                                                 ; Turns T2CON on (Set bit 2)
+0045   0092           00074         MOVWF T2CON
+                      00075         
+                      00076         ;Enable Steering to P1B
+0046   1683 1303      00077         BANKSEL PSTRCON
+0048   3012           00078         movlw   b'00010010' ;Enables Sterring to P1B
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0049   009D           00079         movwf   PSTRCON
+                      00080         
+004A   1283 1303      00081         BANKSEL PIR1 
+004C   1C8C           00082         btfss   PIR1, 1 ;wait until Timer 2 Overflows before starting
+004D   2???           00083         goto    $-1
+                      00084     
+                      00085         ;Setting Init incomplete for other two modes
+                      00086         ;This means when the mode changes the other modes know to reinitialise
+004E   3000           00087         movlw d'0'
+004F   00??           00088         movwf   LinearFeedbackInitComplete
+0050   00??           00089         movwf   StrobeInitComplete
+                      00090         
+                      00091         ;Setting Variable PWM init complete so is only initialised once after mode selected
+0051   3001           00092         movlw d'1'
+0052   00??           00093         movwf VariablePWMInitComplete
+Warning[203]: Found opcode in column 1. (return)
+0053   0008           00094 return
+                      00095         
+0054                  00096 VariablePWM     ;Main Variable PWM Function
+0054   1C00           00097             btfss VariablePWMInitComplete,0 ;Check if Initialisation is complete
+0055   2???           00098             call VariablePWMInit                        ;Call initialisation if not yet performed
+                      00099             
+0056   1800           00100             btfsc   ConfigMode,0                        ;Check if config enabled via ISR
+0057   2???           00101             call    VariablePWMConfig           ;Calls config function if desired
+                      00102             
+0058   08??           00103             movfw   Brightness2                         ;Moves Brightness2 into a working variable for t
+                            he loops called LoopCountdown
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0059   00??           00104             movwf   LoopCountdown
+                      00105             
+Warning[207]: Found label after column 1. (PWMLoopDown)
+005A                  00106     PWMLoopDown                                                 ;PWM 'Count Down loop'
+005A   00??           00107             movwf SpeedSelectPWM                        ;User Specified speed for the variable PWM
+005B   2???           00108             call DelWms                                         
+                      00109             
+005C   1283 1303      00110             BANKSEL CCPR1L                              ; Select bank 1 and CCPR1L register
+005E   08??           00111             movfw LoopCountdown                         ;Sets the Working variable LoopCountdown to the 
+                            duty
+005F   0095           00112             MOVWF CCPR1L                                        ;Sets the new duty
+                      00113             
+                      00114             ;loopcountdown initially holds Brightness2
+                      00115             ;Compare birghtness 1 with 2 if no match then reduce 2 
+                      00116                 ;This repeats over and over until the Brightness 2 matches Brightness1.
+                      00117                 ;At this point program leaves PWMLoopDown and now enters PWMLoopUp to count up
+0060   03??           00118             DECF    LoopCountdown,F             ;Decreases LoopCountdown AKA our current duty
+0061   08??           00119             movfw   Brightness1                 
+0062   06??           00120             xorwf   LoopCountdown,w             ;Xors current LoopCountdown with brightness 1
+                      00121            
+0063   1D03           00122             btfss   STATUS,Z            ;Checks if Xor was 0 AKA if the LoopCountdown matches Brightnes1
+0064   2???           00123             goto    PWMLoopDown    ; jump back to the loop label if count is not zero
+                      00124         
+0065   08??           00125         movfw   Brightness1                     ;Moves Brightness1 into a working variable for the loops
+                             called LoopCountup
+0066   00??           00126         movwf   LoopCountup
+                      00127             
+Warning[207]: Found label after column 1. (PWMLoopUp)
+0067                  00128         PWMLoopUp
+0067   00??           00129             movwf SpeedSelectPWM                ;User Specified speed for the variable PWM
+0068   2???           00130             call DelWms
+                      00131             
+0069   1283 1303      00132             BANKSEL CCPR1L                      ;Select bank 1 and CCPR1L register
+006B   08??           00133             movfw LoopCountup                   ;Sets the Working variable LoopCountup to the initial du
+                            ty of brightness1
+006C   0095           00134             MOVWF CCPR1L                                ;Sets the new duty
+                      00135             
+006D   0A??           00136             INCF    LoopCountup,F               ;Increases LoopCountup value
+006E   08??           00137             movfw   Brightness2                 ;Moves to W reg
+006F   06??           00138             xorwf   LoopCountup,w               ;Checks if the LoopCountup value is the same as Brightne
+                            ss 2, stores output in working
+                      00139             
+0070   1D03           00140             btfss   STATUS,Z            ;Checks if Xor was 0
+0071   2???           00141             goto    PWMLoopUp    ; jump back to the loop label if count is not zero    
+                      00142                 ;Completes if value was equal to 0
+                      00143                 ;repeats
+Warning[203]: Found opcode in column 1. (return)
+0072   0008           00144 return
+                      00145 
+0073                  00146 VariablePWMConfig ;Config Function called when ISR for config is enabled
+                      00147             
+0073   1283 1303      00148         banksel INTCON          
+0075   138B           00149         bcf     INTCON, GIE  ; Global interrupt Diable while in routine
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00150                                                 ;Select 4 needs button on INT pin so disable own ISR
+                      00151                              
+                      00152         ;Disable PWM   
+0076   1683 1303      00153         banksel PIE1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0078   018C           00154         clrf PIE1
+                      00155     
+0079   1283 1303      00156         banksel CCP1CON
+007B   0197           00157         clrf CCP1CON
+                      00158     
+007C   1283 1303      00159         banksel TMR2
+007E   0191           00160         clrf TMR2
+                      00161         
+007F   1283 1303      00162         banksel CCPR1L
+0081   0195           00163         clrf    CCPR1L
+                      00164         
+0082   1283 1303      00165         banksel T2CON
+0084   0195           00166         clrf    CCPR1L
+                      00167                              
+0085   1283 1303      00168         banksel LEDs ;Sets LEDS to Alert that PWM config is enabled
+0087   3040           00169         movlw   b'01000000' 
+0088   0088           00170         movwf   LEDs
+                      00171         
+0089   2???           00172         call Select4 ;Pick option 1   ;**** NEED TO COMMENT THE DUTY CORRESPONDING TO EACH NUMBER****
+008A   00??           00173         movwf   VariablePWMConfig1
+                      00174         
+008B   1800           00175         BTFSC   VariablePWMConfig1,0
+008C   3005           00176         movlw   D'5'
+                      00177 
+008D   1880           00178         BTFSC   VariablePWMConfig1,1
+008E   300A           00179         movlw   D'10'
+                      00180 
+008F   1900           00181         BTFSC   VariablePWMConfig1,2
+0090   300F           00182         movlw   D'15'
+                      00183 
+0091   1980           00184         BTFSC   VariablePWMConfig1,3
+0092   3014           00185         movlw   D'20'
+                      00186         
+0093   00??           00187         movwf   SpeedSelectPWM  ;Move chosen value into SpeedSelectPWM
+                      00188         
+0094   2???           00189         call Select4 ;Pick option 2
+0095   00??           00190         movwf   VariablePWMConfig2
+                      00191         
+0096   1800           00192         BTFSC   VariablePWMConfig2,0
+0097   3001           00193         movlw   D'1'
+                      00194 
+0098   1880           00195         BTFSC   VariablePWMConfig2,1
+0099   3002           00196         movlw   D'2'
+                      00197 
+009A   1900           00198         BTFSC   VariablePWMConfig2,2
+009B   3004           00199         movlw   D'4'
+                      00200 
+009C   1980           00201         BTFSC   VariablePWMConfig2,3
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 12
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+009D   3008           00202         movlw   D'8'
+                      00203         
+009E   00??           00204         movwf   Brightness1                     ;Move chosen value into Brightness1
+                      00205         
+009F   2???           00206         call Select4 ;Pick option 3
+00A0   00??           00207         movwf   VariablePWMConfig3
+                      00208         
+00A1   1800           00209         BTFSC   VariablePWMConfig3,0
+00A2   3010           00210         movlw   D'16'
+                      00211 
+00A3   1880           00212         BTFSC   VariablePWMConfig3,1
+00A4   3012           00213         movlw   D'18'
+                      00214 
+00A5   1900           00215         BTFSC   VariablePWMConfig3,2
+00A6   3014           00216         movlw   D'20'
+                      00217 
+00A7   1980           00218         BTFSC   VariablePWMConfig3,3
+00A8   3018           00219         movlw   D'24'
+                      00220         
+00A9   00??           00221         movwf   Brightness2                     ;Move chosen value into Brightness2
+                      00222         
+                      00223         ;Clear LED's from config mode
+00AA   1283 1303      00224         banksel LEDs
+00AC   0188           00225         clrf LEDs
+                      00226         
+                      00227         
+00AD   3000           00228         movlw   d'0'
+00AE   00??           00229         movwf   ConfigMode      ;Setting ConfigMode to 0 indicating configuration complete
+00AF   00??           00230         movwf   VariablePWMInitComplete ;Sets VariablePWMInitComplete to '0', telling the function initi
+                            alisation needs to be done again with changes
+                      00231         
+00B0   1283 1303      00232         banksel INTCON
+00B2   108B           00233         bcf     INTCON, INTF            ;Clear the INT flag caused by using Select4
+00B3   178B           00234         bsf     INTCON, GIE     ;Global interrupt renable
+Warning[203]: Found opcode in column 1. (return)
+00B4   0008           00235 return
+                      00236         
+00B5                  00237 StrobeInit ;Initialisation function for the Strobe Function
+                      00238         ;Disables PWM   
+00B5   1683 1303      00239         banksel PIE1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00B7   018C           00240         clrf PIE1
+                      00241     
+00B8   1283 1303      00242         banksel CCP1CON
+00BA   0197           00243         clrf CCP1CON
+                      00244     
+00BB   1283 1303      00245         banksel TMR2
+00BD   0191           00246         clrf TMR2
+                      00247         
+00BE   1283 1303      00248         banksel CCPR1L
+00C0   0195           00249         clrf    CCPR1L
+                      00250         
+00C1   1283 1303      00251         banksel T2CON
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 13
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00C3   0195           00252         clrf    CCPR1L
+                      00253         
+                      00254         ;Setting Init incomplete for other two modes
+00C4   3000           00255         movlw d'0'
+00C5   00??           00256         movwf   LinearFeedbackInitComplete
+00C6   00??           00257         movwf   VariablePWMInitComplete
+                      00258                 
+                      00259         ;Setting Side to side strobe init as complete
+00C7   3001           00260         movlw d'1'
+00C8   00??           00261         movwf StrobeInitComplete
+Warning[203]: Found opcode in column 1. (return)
+00C9   0008           00262 return
+                      00263 
+                      00264 ;Subroutine Used to check if mode has changed while side to side stobe is used
+00CA                  00265 ADCCheck ;Checking Here if mode has changed in the middle of the strobe
+00CA   149F           00266             bsf ADCON0, GO_DONE ;Start Aquestision
+00CB   189F           00267             btfsc ADCON0, GO_DONE ;Wait until aquesition is done
+00CC   2???           00268             goto $-1
+00CD   081E           00269             movfw ADRESH                ;Move the 8 MSB (left justified) to working
+00CE   39C0           00270             andlw   B'11000000' ; mask unused bits
+00CF   3A80           00271             xorlw   d'128'              ;Xor the modeselect with 128 (Expected value of ADC for Mode2 af
+                            ter masking)
+00D0   1D03           00272             btfss STATUS, Z             ;Checks if the outcome was 0, AKA values match
+00D1   2???           00273             goto MLoop  ;If outcome isn't 0 check next possible value
+Warning[203]: Found opcode in column 1. (return)
+00D2   0008           00274 return
+                      00275         
+00D3                  00276 SideToSideStrobe        ;Main function for side to side strobe
+00D3   1C00           00277             btfss StrobeInitComplete,0  ;Check if Initialisation is complete
+00D4   2???           00278             call StrobeInit             ;Calles initialisation if not complete
+                      00279             
+00D5   1003           00280             bcf   STATUS,C      
+                      00281         
+00D6   1C00           00282             BTFSS direction_select, 0  ; Check the direction select bit 
+00D7   2???           00283             GOTO ForwardandBack  ;If its 0 do forward and back 
+00D8   2???           00284             GOTO ForwardOnly    ;If its 1 do forward only
+                      00285             
+Warning[207]: Found label after column 1. (ForwardandBack)
+00D9                  00286     ForwardandBack ;Forward and back loop           
+00D9   1C00           00287             btfss current_direction,0 ;Check if where in the forward/back cycle the stobe was
+00DA   2???           00288             goto loop1  
+00DB   2???           00289             goto loop2
+                      00290 
+Warning[207]: Found label after column 1. (loop1)
+00DC                  00291     loop1
+                      00292     
+00DC   03??           00293             decf  count, F ; decrement count and skip next instruction if count = 0
+00DD   1903           00294             btfsc   STATUS,Z ;skip if Count is not 0
+00DE   2???           00295             goto    loop1end   ; jump back to the loop label if count is not zero
+                      00296             
+00DF   08??           00297             MOVFW led_pattern ; Get the current LED pattern
+00E0   0088           00298             MOVWF PORTD  ; Output the LED pattern to Port D
+                      00299             
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 14
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00300             ;Delay Here based user selected option
+00E1   08??           00301             movfw speedSelect
+00E2   2???           00302             call DelWms 
+                      00303             
+00E3   0D??           00304             RLF led_pattern, F  ; Shift the LED pattern left
+00E4   1003           00305             bcf   STATUS,C      ;Clear the carry bit
+                      00306             
+00E5   3000           00307             movlw   d'0'        ;Sets the Current Direction bit flag
+00E6   00??           00308             movwf   current_direction
+                      00309 
+00E7   1800           00310             btfsc   ConfigMode,0                ;Check if config enabled each loop
+00E8   2???           00311             call    SideToSideStrobeConfig      ;Calls config if ISR has set the config bit
+                      00312             
+                      00313             ;Checking Here if mode has changed in the middle of the strobe
+00E9   2???           00314             Call ADCCheck
+                      00315             
+                      00316             
+                      00317 
+00EA   2???           00318             goto    loop1    ; jump back to the loop label if count is not zero
+                      00319             
+00EB                  00320 loop1end
+                      00321             ;Restarts count for the reverse motion
+00EB   3008           00322             movlw   d'8'       ; load the value 8 into the W register
+00EC   00??           00323             movwf   count   ; store the value 8 into a variable named count 
+00ED   3080           00324             MOVLW           B'10000000'  ; Initialize the first LED to on
+00EE   00??           00325             MOVWF           led_pattern
+                      00326             
+Warning[207]: Found label after column 1. (loop2)
+00EF                  00327     loop2    
+00EF   03??           00328             decf  count, F ; decrement count and skip next instruction if count = 0
+00F0   1903           00329             btfsc   STATUS,Z ;skip if Count is not 0
+00F1   2???           00330             goto    loop2end   ; jump back to the loop label if count is not zero
+                      00331             
+00F2   08??           00332             MOVFW led_pattern ; Get the current LED pattern
+00F3   0088           00333             MOVWF PORTD  ; Output the LED pattern to Port D
+                      00334             
+                      00335             ;Delay Here based on speed
+00F4   08??           00336             movfw speedSelect
+00F5   2???           00337             call DelWms 
+                      00338             
+00F6   0C??           00339             RRF led_pattern, F  ; Shift the LED pattern left
+00F7   1003           00340             bcf   STATUS,C      ;Clear the Carry bit
+                      00341             
+00F8   3001           00342             movlw   d'1'        ;Sets the current direction bit flag
+00F9   00??           00343             movwf   current_direction   
+                      00344 
+00FA   1800           00345             btfsc   ConfigMode,0                ;Check if config enabled each loop
+00FB   2???           00346             call    SideToSideStrobeConfig      ;Calls config if ISR has set the config bit
+                      00347             
+                      00348             ;Checking Here if mode has changed in the middle of the strobe
+00FC   2???           00349             Call ADCCheck
+                      00350             
+00FD   2???           00351             goto    loop2    ; jump back to the loop label if count is not zero
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 15
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00352             
+Warning[207]: Found label after column 1. (loop2end)
+00FE                  00353         loop2end
+                      00354             
+                      00355         ;Resetting the LED pattern once a full forward and back sequence is complete
+00FE   ???? ????      00356         banksel     led_pattern
+0100   3001           00357         MOVLW       B'00000001'  ; Initialize the first LED to on
+0101   00??           00358         MOVWF       led_pattern
+0102   1003           00359         bcf         STATUS,C            ;Clear the Carry Status Bit
+                      00360         ;Resetting the current direction and count
+0103   3000           00361         movlw       d'0'
+0104   00??           00362         movwf       current_direction
+0105   3008           00363         movlw       d'8'
+0106   00??           00364         movwf       count
+0107   2???           00365         goto MLoop                      ;Once the forwards and back is complete goto main to check if th
+                            e operation mode has changed
+                      00366         
+Warning[207]: Found label after column 1. (ForwardOnly)
+0108                  00367     ForwardOnly ;Forward ONLY loop
+Warning[207]: Found label after column 1. (loop3)
+0108                  00368         loop3
+0108   08??           00369             MOVFW led_pattern ; Get the current LED pattern
+0109   0088           00370             MOVWF PORTD  ; Output the LED pattern to Port D
+                      00371             
+                      00372             ;Delay Here based on speed
+010A   08??           00373             movfw speedSelect
+010B   2???           00374             call DelWms 
+                      00375             
+010C   0D??           00376             RLF led_pattern, F  ; Shift the LED pattern left
+                      00377             
+010D   1800           00378             btfsc   ConfigMode,0                ;Check if config enabled each loop
+010E   2???           00379             call    SideToSideStrobeConfig      ;Calls config if ISR has set the config bit
+                      00380             
+                      00381             ;Checking Here if mode has changed in the middle of the strobe
+010F   2???           00382             Call ADCCheck
+                      00383             
+0110   0B??           00384             decfsz  count, F ; decrement count and skip next instruction if count = 0
+0111   2???           00385             goto    loop3    ; jump back to the loop label if count is not zero
+                      00386         ;Resetting the LED pattern once the forward only sequence is complete
+0112   ???? ????      00387         banksel     led_pattern
+0114   3001           00388         MOVLW       B'00000001'  ; Initialize the first LED to on
+0115   00??           00389         MOVWF       led_pattern
+0116   1003           00390         bcf         STATUS,C    
+0117   3008           00391         movlw   8       ; load the value 8 into the W register
+0118   00??           00392         movwf   count   ; store the value 8 into a variable named count
+0119   2???           00393         goto MLoop      ;Once the forwards only motion is complete goto main to check if the operation m
+                            ode has changed
+011A   0008           00394     return
+                      00395         
+011B                  00396 SideToSideStrobeConfig  ;Configuration Options for the Side to Side strobe
+011B   1283 1303      00397         banksel INTCON
+011D   138B           00398         bcf     INTCON, GIE  ; Global interrupt Diable while in routine
+                      00399                                                 ;Select 4 needs button on INT pin so disable own ISR
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 16
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+011E   1283 1303      00400         banksel LEDs ;Sets LEDS for config mode
+0120   3080           00401         movlw b'10000000'
+0121   0088           00402         movwf LEDs
+                      00403         
+0122   2???           00404         call Select4 ;Pick option 1
+0123   00??           00405         movwf   SidetoSideConfig1
+0124   1800           00406         BTFSC   SidetoSideConfig1,0
+0125   300A           00407         movlw   D'10'
+                      00408 
+0126   1880           00409         BTFSC   SidetoSideConfig1,1
+0127   3032           00410         movlw   D'50'
+                      00411 
+0128   1900           00412         BTFSC   SidetoSideConfig1,2
+0129   3064           00413         movlw   D'100'
+                      00414 
+012A   1980           00415         BTFSC   SidetoSideConfig1,3
+012B   30FF           00416         movlw   D'255'
+                      00417         
+012C   00??           00418         movwf   speedSelect
+                      00419     
+012D   2???           00420         call Select4 ;Pick option 2
+012E   00??           00421         movwf   SidetoSideConfig2
+012F   1800           00422         BTFSC   SidetoSideConfig2,0
+0130   3000           00423         movlw   D'0'
+                      00424 
+0131   1880           00425         BTFSC   SidetoSideConfig2,1
+0132   3000           00426         movlw   D'0'
+                      00427 
+0133   1900           00428         BTFSC   SidetoSideConfig2,2
+0134   3001           00429         movlw   D'1'
+                      00430 
+0135   1980           00431         BTFSC   SidetoSideConfig2,3
+0136   3001           00432         movlw   D'1'
+                      00433         
+0137   00??           00434         movwf direction_select
+                      00435         ;Direction_select 0 Forwards (0->7) and Back (7->0) 
+                      00436         ;Direction_select 1 goes to 0-7 before resetting back at 0
+                      00437         
+0138   ???? ????      00438         banksel ConfigMode      ;Sets Config mode to 0 indicating config is finished
+013A   3000           00439         movlw   d'0'
+013B   00??           00440         movwf   ConfigMode
+                      00441         
+013C   1283 1303      00442         banksel INTCON
+013E   108B           00443         bcf     INTCON, INTF            ;Clear the INT flag caused by using Select4
+013F   178B           00444         bsf     INTCON, GIE             ; Global interrupt renable
+Warning[203]: Found opcode in column 1. (return)
+0140   0008           00445 return
+                      00446 
+                      00447         
+0141                  00448 xor ;Function used by the main Linear feedback register function
+0141   08??           00449         movfw   poly            ;Xor the LFSR_reg with the polynomial
+0142   06??           00450         xorwf   LFSR_reg,f      ;Stores the outcome of the XOR in the LFSR_reg variable
+Warning[203]: Found opcode in column 1. (return)
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 17
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0143   0008           00451 return  
+                      00452         
+0144                  00453 LinearFeedbackRegisterInit      ;Initialises the LFSR
+                      00454         ;Disable PWM
+0144   1683 1303      00455         banksel PIE1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0146   018C           00456         clrf PIE1
+                      00457     
+0147   1283 1303      00458         banksel CCP1CON
+0149   0197           00459         clrf CCP1CON
+                      00460     
+014A   1283 1303      00461         banksel TMR2
+014C   0191           00462         clrf TMR2
+                      00463         
+014D   1283 1303      00464         banksel CCPR1L
+014F   0195           00465         clrf    CCPR1L
+                      00466         
+0150   1283 1303      00467         banksel T2CON
+0152   0195           00468         clrf    CCPR1L
+                      00469         
+                      00470         
+                      00471         ;Setting Init incomplete for other two modes
+0153   3000           00472         movlw d'0'
+0154   00??           00473         movwf   VariablePWMInitComplete
+0155   00??           00474         movwf   StrobeInitComplete
+                      00475         
+                      00476         ;Setting LinearFeedbackInitComplete complete
+0156   3001           00477         movlw d'1'
+0157   00??           00478         movwf LinearFeedbackInitComplete
+                      00479 
+0158   0008           00480         return
+                      00481 
+0159                  00482 LinearFeedbackRegister ;Main function for linear feedback register
+0159   1C00           00483         btfss LinearFeedbackInitComplete,0 ;Check if Initialisation is complete
+015A   2???           00484         call LinearFeedbackRegisterInit         ;if not call initialisation function
+                      00485         
+015B   1800           00486         btfsc   ConfigMode,0                            ;Checks to see if the config is active
+015C   2???           00487         call    LinearFeedbackRegisterConfig
+                      00488         
+015D   08??           00489         movfw   LFSR_reg        ;Moves the initial LFSR value to the LEDs
+015E   0088           00490         movwf   PORTD
+015F   00??           00491         movwf   LFSR_regtemp
+                      00492         
+0160   08??           00493         movfw   LSFR_time       ;Calls delay for the user specified time
+0161   2???           00494         call    DelWms
+                      00495 
+0162   1003           00496         bcf     STATUS, C
+0163   0C??           00497         rrf     LFSR_reg,f      ;Shift the LFSR value to the right once
+                      00498         
+0164   1800           00499         btfsc   LFSR_regtemp,0  ;Tests the LSB of the LFSR, if it is 1 then calls the XOR function
+0165   2???           00500         call    xor     
+                      00501 
+0166   0008           00502         return
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 18
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00503 
+                      00504         
+0167                  00505 LinearFeedbackRegisterConfig    ;COnfiguration mode for the LFSR utility
+0167   1283 1303      00506         banksel INTCON
+0169   138B           00507         bcf     INTCON, GIE  ; Global interrupt Diable while in routine
+                      00508                                                 ;Select 4 needs button on INT pin so disable own ISR
+016A   1283 1303      00509         banksel LEDs ;Sets LEDs for config mode
+016C   30C0           00510         movlw b'11000000'
+016D   0088           00511         movwf LEDs
+                      00512         
+016E   2???           00513         call Select4 ;Pick option 1     ;Aka time between new LFSR values
+016F   00??           00514         movwf   LinearFeedbackConfig1
+0170   1800           00515         BTFSC   LinearFeedbackConfig1,0
+0171   300A           00516         movlw   D'10'
+                      00517 
+0172   1880           00518         BTFSC   LinearFeedbackConfig1,1
+0173   3032           00519         movlw   D'50'
+                      00520 
+0174   1900           00521         BTFSC   LinearFeedbackConfig1,2
+0175   3064           00522         movlw   D'100'
+                      00523 
+0176   1980           00524         BTFSC   LinearFeedbackConfig1,3
+0177   30FF           00525         movlw   D'255'
+                      00526         
+0178   00??           00527         movwf   LSFR_time
+                      00528         
+                      00529         
+0179   3000           00530         movlw   d'0'            ;Sets config mode to 0 indicating config complete
+017A   00??           00531         movwf   ConfigMode
+                      00532         
+017B   1283 1303      00533         banksel LEDs            ;Clears the config LED's
+017D   0188           00534         clrf    LEDs
+                      00535         
+017E   1283 1303      00536         banksel INTCON
+0180   108B           00537         bcf     INTCON, INTF    ;Clear the INT flag caused by using Select4
+0181   178B           00538         bsf     INTCON, GIE  ; Global interrupt enable
+0182   0008           00539         return
+                      00540         
+                      00541 ; Provided code - do not edit  
+0183   0000           00542 Main    nop
+                      00543 #include ECH_INIT.inc
+                      00001 ; DO NOT EDIT ! ! !
+                      00002 
+                      00003 ; initialisation of the pins according to board wiring   
+                      00004 ;{
+                      00005 ; set all outputs to zero before configuring the pinsLEDs to off before configuring the pins
+0184   0185           00006                 clrf    PORTA
+0185   0186           00007                 clrf    PORTB
+0186   0187           00008                 clrf    PORTC
+0187   0188           00009                 clrf    PORTD
+0188   0189           00010                 clrf    PORTE
+                      00011 
+0189   1683 1703      00012                 banksel ANSELH                  ; switch to bank 4
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 19
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00013 
+                      00014 ; disable analogue inputs except for RA0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+018B   0189           00015                 clrf    ANSELH
+018C   3001           00016                 movlw   B'00000001'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+018D   0088           00017                 movwf   ANSEL
+                      00018 
+018E   1683 1303      00019                 banksel TRISA                   ; switch to bank 1
+                      00020 
+                      00021 ; init unused pins for PORTA (outputs)
+0190   3001           00022                 movlw   B'00000001'     ; this constant was in W already, shown here for clarity
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0191   0085           00023                 movwf   TRISA
+                      00024 
+                      00025 ; init PORTB (RB0 for input, unused pins for output)
+0192   3001           00026                 movlw   B'00000001'     ; this constant was in W already, shown here for clarity
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0193   0086           00027                 movwf   TRISB
+                      00028 
+                      00029 ; init PORTC (all pins unused - for output)
+0194   3000           00030                 movlw   B'00000000'     ; this constant was in W already, shown here for clarity
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0195   0087           00031                 movwf   TRISC
+                      00032 
+                      00033 ; init LEDs (PORTD to outputs)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0196   0188           00034                 clrf    TRISD
+                      00035 
+                      00036 ; init PORTE (four pins present, RE3 is MCLR anyway; all outputs for simplicity)
+0197   30F8           00037                 movlw   B'11111000'     
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0198   0089           00038                 movwf   TRISE
+                      00039 
+                      00040 ; init the TMR0 keeping the two MSBs of OPTION_REG the same
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0199   0801           00041                 movfw   OPTION_REG
+019A   3908           00042                 andlw   B'00001000'             ; prescaler to WDT to have Tcy clock for TMR0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+019B   0081           00043         movwf   OPTION_REG       
+                      00044 
+                      00045 ; init the ADC - need bank 0 and 1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+019C   019F           00046                 clrf    ADCON1          ; Left justified, refernces: Vss and Vdd
+019D   1283 1303      00047                 banksel PORTD           ; switch back to bank 0
+019F   3041           00048                 movlw   B'01000001'     ; Fosc/8, AN0, enable 
+01A0   009F           00049                 movwf   ADCON0
+                      00050 ;}
+                      00051 
+                      00052 ;       
+                      00053 ; blink LEDs for 0.3 s for testing   
+                      00054 ;{
+01A1   30FF           00055                 movlw   B'11111111'     ; all LEDs ON
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 20
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+01A2   0088           00056                 movwf   LEDs
+01A3   3003           00057                 movlw   D'3'            ; delay
+01A4   2???           00058                 call    DelWds
+01A5   0188           00059                 clrf    LEDs            ; all LEDs OFF
+01A6   3003           00060                 movlw   D'3'            ; delay
+01A7   2???           00061                 call    DelWds
+                      00062 ;}
+                      00063 ;
+                      00064         
+                      00544 
+                      00545 ; Place your INITIALISATION code (if any) here ...   
+                      00546 ;{ ***          ***************************************************
+                      00547 ; e.g.,         movwf   Ctr1 ; etc
+                      00548 
+                      00549 ;Set LED's as output
+Warning[205]: Found directive in column 1. (banksel)
+01A8   1683 1303      00550 banksel TRISD
+Warning[203]: Found opcode in column 1. (movlw)
+01AA   3000           00551 movlw   b'00000000'
+Warning[203]: Found opcode in column 1. (movwf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01AB   0088           00552 movwf   TRISD ; Set LEDS as output
+                      00553                 
+                      00554 ;Enable ISR on INT pin for Config mode activation
+Warning[205]: Found directive in column 1. (banksel)
+01AC   1683 1303      00555 banksel TRISB
+Warning[203]: Found opcode in column 1. (bsf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01AE   1406           00556 bsf     TRISB, RB0 ; Set INT pin as input
+                      00557         
+Warning[205]: Found directive in column 1. (banksel)
+01AF   1683 1303      00558 banksel OPTION_REG
+Warning[203]: Found opcode in column 1. (bsf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01B1   1701           00559 bsf     OPTION_REG, INTEDG ; Enable interrupt on falling edge
+                      00560 
+Warning[205]: Found directive in column 1. (banksel)
+01B2   1283 1303      00561 banksel INTCON
+Warning[203]: Found opcode in column 1. (bsf)
+01B4   178B           00562 bsf     INTCON, GIE  ; Global interrupt enable
+Warning[203]: Found opcode in column 1. (bsf)
+01B5   160B           00563 bsf     INTCON, INTE ; Enable external interrupt
+                      00564                 
+                      00565 ;ADC SETUP              
+Warning[205]: Found directive in column 1. (banksel)
+01B6   1683 1303      00566 banksel ADCON1 ;Left Justify, Reference as VSS and GND
+                      00567 ;Done this way as select 4 uses same justification so saves having to do as many periperhal changes betw
+                            een modes
+Warning[203]: Found opcode in column 1. (movlw)
+01B8   3000           00568 movlw b'00000000'
+Warning[203]: Found opcode in column 1. (movwf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01B9   009F           00569 movwf ADCON1
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 21
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00570         
+Warning[205]: Found directive in column 1. (banksel)
+01BA   1683 1303      00571 banksel TRISA   ;Set RA0 to input
+Warning[203]: Found opcode in column 1. (bsf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01BC   1405           00572 bsf TRISA, 0
+                      00573         
+Warning[205]: Found directive in column 1. (banksel)
+01BD   1683 1703      00574 banksel ANSEL ;Set RA0 to analogue      
+Warning[203]: Found opcode in column 1. (bsf)
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+01BF   1408           00575 bsf ANSEL, 0
+                      00576 
+Warning[205]: Found directive in column 1. (banksel)
+01C0   1283 1303      00577 banksel ADCON0 
+Warning[203]: Found opcode in column 1. (movlw)
+01C2   3041           00578 movlw b'01000001' ;ADC Conversion Clock set bits to internal clock, Set input to AD1, Enable ADC. Clear 
+                            Go/done bit
+Warning[203]: Found opcode in column 1. (movwf)
+01C3   009F           00579 movwf ADCON0      ;ADC <01> is for Internal Clock
+                      00580         
+Warning[203]: Found opcode in column 1. (Call)
+01C4   2???           00581 Call SampleTime         ;Call sample time to allow the ADC input to stabalise
+                      00582                                 
+                      00583                                 
+                      00584 ;Setting Up Initial Variables for Each of the modes
+                      00585         ;Variable PWM variabels
+                      00586         ;Setting initial Values for user choices
+01C5   3005           00587         movlw   d'5'
+01C6   00??           00588         movwf Brightness1
+                      00589         
+01C7   301E           00590         movlw   d'30'
+01C8   00??           00591         movwf Brightness2
+                      00592         
+01C9   3032           00593         movlw   d'50'
+01CA   00??           00594         movwf   SpeedSelectPWM
+                      00595         
+                      00596         ;Side to Side Strobe Variables
+                      00597         ;Setting Initial Values for User config
+01CB   30FF           00598         movlw   D'255'
+01CC   00??           00599         movwf   speedSelect
+                      00600         ;Setting Initial Direction
+01CD   3000           00601         movlw   D'0'
+01CE   00??           00602         movwf   direction_select
+                      00603         
+01CF   ???? ????      00604         banksel led_pattern
+01D1   3001           00605         MOVLW B'00000001'  ; Initialize the first LED to on
+01D2   00??           00606         MOVWF led_pattern
+                      00607         
+01D3   3008           00608         movlw d'8'
+01D4   00??           00609         movwf   count
+                      00610                                 
+                      00611         ;LFSR Variables         
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 22
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00612         ;Initial Value of the time between LFSR values 
+01D5   30FF           00613         movlw   d'255'
+01D6   00??           00614         movwf   LSFR_time
+                      00615         
+                      00616         ;Inital Value of the LFSR
+01D7   3001           00617         MOVLW 0x01
+01D8   00??           00618         MOVWF LFSR_reg
+                      00619     
+                      00620         ;Sets the Value of the Polynomial
+01D9   30B8           00621         MOVLW 0xB8      ;Represents the polynomial '10111000' Aka X^8 + x^6 + x^5 + x^4 +1 which is maxi
+                            mal period 
+01DA   00??           00622         MOVWF poly
+                      00623         
+                      00624         
+                      00625                 
+                      00626 ;} 
+                      00627 ; end of your initialisation
+                      00628 
+01DB   0000           00629 MLoop   nop
+                      00630 
+                      00631 ; place your superloop code here ...  
+                      00632 ;{
+                      00633 ;Read ADC
+Warning[203]: Found opcode in column 1. (bsf)
+01DC   149F           00634 bsf ADCON0, GO_DONE ;Start Aquestision
+Warning[203]: Found opcode in column 1. (btfsc)
+01DD   189F           00635 btfsc ADCON0, GO_DONE ;Wait until aquesition is done
+Warning[203]: Found opcode in column 1. (goto)
+01DE   2???           00636 goto $-1
+Warning[204]: Found pseudo-op in column 1. (movfw)
+01DF   081E           00637 movfw ADRESH            ;Move the 8 MSB (left justified) to working
+                      00638                 
+Warning[203]: Found opcode in column 1. (andlw)
+01E0   39C0           00639 andlw   B'11000000'     ; mask unused bits
+Warning[203]: Found opcode in column 1. (movwf)
+01E1   00??           00640 movwf ModeSelect        ;Move masked value into variable
+                      00641                 
+                      00642     ; Compare the value to 0
+01E2   08??           00643     movfw ModeSelect
+01E3   3A00           00644     xorlw d'0'          ;Xor the modeselect with 0
+01E4   1D03           00645     btfss STATUS, Z     ;Checks if the outcome was 0
+01E5   2???           00646     goto check_two      ;If outcome isn't 0 check next possible value
+                      00647         
+                      00648     ; Call the mode one subroutine
+01E6   2???           00649     call VariablePWM    ;Call first mode 
+01E7   2???           00650     goto MLoop                  ;When returning from from call, start main again
+                      00651         
+Warning[207]: Found label after column 1. (check_two)
+01E8                  00652     check_two
+                      00653     ; Compare the value to 2
+01E8   08??           00654     movfw ModeSelect
+01E9   3A80           00655     xorlw d'128'                ;Xor the modeselect with 128 (Expected value of ADC for Mode2 after mask
+                            ing)
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 23
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+01EA   1D03           00656     btfss STATUS, Z             ;Checks if the outcome was 0, AKA values match
+01EB   2???           00657     goto check_three    ;If outcome isn't 0 check next possible value
+                      00658         
+                      00659     ; Call the mode two subroutine
+01EC   2???           00660     call SideToSideStrobe
+01ED   2???           00661     goto MLoop                  ;When returning from from call, start main again
+                      00662         
+Warning[207]: Found label after column 1. (check_three)
+01EE                  00663     check_three
+                      00664     ; Compare the value to 3
+01EE   08??           00665     movfw ModeSelect
+01EF   3AC0           00666     xorlw d'192'                ;Xor the modeselect with 192 (Expected value of ADC for Mode3 after mask
+                            ing)
+01F0   1D03           00667     btfss STATUS, Z             ;Checks if the outcome was 0, AKA values match
+01F1   2???           00668     goto MLoop                  ;If outcome isn't 0 goes to start of main
+                      00669         
+                      00670     ; Call the mode three subroutine
+01F2   2???           00671     call LinearFeedbackRegister         
+                      00672 
+                      00673 ;}      
+                      00674 ; end of your superloop code
+                      00675 
+01F3   2???           00676     goto        MLoop
+                      00677 
+Warning[205]: Found directive in column 1. (end)
+00A4 3EFF             00678 end
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 24
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+A                                 00000001
+ABDEN                             00000000
+ABDOVF                            00000007
+ACKDT                             00000005
+ACKEN                             00000004
+ACKSTAT                           00000006
+ADCCheck                          000000CA
+ADCON0                            0000001F
+ADCON1                            0000009F
+ADCS0                             00000006
+ADCS1                             00000007
+ADDEN                             00000003
+ADFM                              00000007
+ADIE                              00000006
+ADIF                              00000006
+ADON                              00000000
+ADRESH                            0000001E
+ADRESL                            0000009E
+ANS0                              00000000
+ANS1                              00000001
+ANS10                             00000002
+ANS11                             00000003
+ANS12                             00000004
+ANS13                             00000005
+ANS2                              00000002
+ANS3                              00000003
+ANS4                              00000004
+ANS5                              00000005
+ANS6                              00000006
+ANS7                              00000007
+ANS8                              00000000
+ANS9                              00000001
+ANSEL                             00000188
+ANSELH                            00000189
+BAUDCTL                           00000187
+BCLIE                             00000003
+BCLIF                             00000003
+BF                                00000000
+BRG0                              00000000
+BRG1                              00000001
+BRG10                             00000002
+BRG11                             00000003
+BRG12                             00000004
+BRG13                             00000005
+BRG14                             00000006
+BRG15                             00000007
+BRG16                             00000003
+BRG2                              00000002
+BRG3                              00000003
+BRG4                              00000004
+BRG5                              00000005
+BRG6                              00000006
+BRG7                              00000007
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 25
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+BRG8                              00000000
+BRG9                              00000001
+BRGH                              00000002
+Bop                               00000002
+Brightness1                       00000009
+Brightness2                       0000000B
+C                                 00000000
+C1CH0                             00000000
+C1CH1                             00000001
+C1IE                              00000005
+C1IF                              00000005
+C1OE                              00000005
+C1ON                              00000007
+C1OUT                             00000006
+C1POL                             00000004
+C1R                               00000002
+C1RSEL                            00000005
+C1SEN                             00000005
+C2CH0                             00000000
+C2CH1                             00000001
+C2IE                              00000006
+C2IF                              00000006
+C2OE                              00000005
+C2ON                              00000007
+C2OUT                             00000006
+C2POL                             00000004
+C2R                               00000002
+C2REN                             00000004
+C2RSEL                            00000004
+C2SYNC                            00000000
+CCP1CON                           00000017
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCP2CON                           0000001D
+CCP2IE                            00000000
+CCP2IF                            00000000
+CCP2M0                            00000000
+CCP2M1                            00000001
+CCP2M2                            00000002
+CCP2M3                            00000003
+CCP2X                             00000005
+CCP2Y                             00000004
+CCPR1                             00000015
+CCPR1H                            00000016
+CCPR1L                            00000015
+CCPR2                             0000001B
+CCPR2H                            0000001C
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 26
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CCPR2L                            0000001B
+CHS0                              00000002
+CHS1                              00000003
+CHS2                              00000004
+CHS3                              00000005
+CKE                               00000006
+CKP                               00000004
+CM1CON0                           00000107
+CM2CON0                           00000108
+CM2CON1                           00000109
+CREN                              00000004
+CSRC                              00000007
+ConfigMode                        00000003
+D                                 00000005
+DATA_ADDRESS                      00000005
+DC                                00000001
+DC1B0                             00000004
+DC1B1                             00000005
+DC2B0                             00000004
+DC2B1                             00000005
+D_A                               00000005
+D_Ctr1                            0000001C
+D_Ctr2                            0000001D
+D_Ctr3                            0000001E
+D_L1                              00000009
+D_L2                              00000011
+D_L3                              00000016
+D_L4                              00000002
+D_NOT_A                           00000005
+DeBounce                          00000020
+DelWds                            00000015
+DelWms                            00000010
+Del_100us                         00000000
+Del_ms                            00000007
+ECCPAS                            0000009C
+ECCPAS0                           00000004
+ECCPAS1                           00000005
+ECCPAS2                           00000006
+ECCPASE                           00000007
+EEADR                             0000010D
+EEADRH                            0000010F
+EECON1                            0000018C
+EECON2                            0000018D
+EEDAT                             0000010C
+EEDATA                            0000010C
+EEDATH                            0000010E
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+F                                 00000001
+FERR                              00000002
+FSR                               00000004
+FVREN                             00000000
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 27
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ForwardOnly                       00000108
+ForwardandBack                    000000D9
+GCEN                              00000007
+GIE                               00000007
+GO                                00000001
+GO_DONE                           00000001
+GO_NOT_DONE                       00000001
+HTS                               00000002
+I2C_DATA                          00000005
+I2C_READ                          00000002
+I2C_START                         00000003
+I2C_STOP                          00000004
+INDF                              00000000
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTF                              00000001
+IOCB                              00000096
+IOCB0                             00000000
+IOCB1                             00000001
+IOCB2                             00000002
+IOCB3                             00000003
+IOCB4                             00000004
+IOCB5                             00000005
+IOCB6                             00000006
+IOCB7                             00000007
+IRCF0                             00000004
+IRCF1                             00000005
+IRCF2                             00000006
+IRP                               00000007
+ISR                               00000020
+LD0                               00000000
+LD1                               00000001
+LD2                               00000002
+LD3                               00000003
+LD4                               00000004
+LD5                               00000005
+LD6                               00000006
+LD7                               00000007
+LEDs                              00000008
+LFSR_reg                          00000017
+LFSR_regtemp                      0000001B
+LSFR_time                         0000001A
+LTS                               00000001
+LinearFeedbackConfig1             00000019
+LinearFeedbackInitComplete        00000016
+LinearFeedbackRegister            00000159
+LinearFeedbackRegisterConfig      00000167
+LinearFeedbackRegisterInit        00000144
+LoopCountdown                     0000000C
+LoopCountup                       0000000D
+MC1OUT                            00000007
+MC2OUT                            00000006
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 28
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+MLoop                             000001DB
+MSK                               00000093
+MSK0                              00000000
+MSK1                              00000001
+MSK2                              00000002
+MSK3                              00000003
+MSK4                              00000004
+MSK5                              00000005
+MSK6                              00000006
+MSK7                              00000007
+Main                              00000183
+ModeSelect                        00000004
+NOT_A                             00000005
+NOT_ADDRESS                       00000005
+NOT_BO                            00000000
+NOT_BOR                           00000000
+NOT_DONE                          00000001
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_RC8                           00000006
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+NOT_TX8                           00000006
+NOT_W                             00000002
+NOT_WRITE                         00000002
+OERR                              00000001
+OPTION_REG                        00000081
+OSCCON                            0000008F
+OSCTUNE                           00000090
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000003
+P                                 00000004
+P1M0                              00000006
+P1M1                              00000007
+PCL                               00000002
+PCLATH                            0000000A
+PCON                              0000008E
+PDC0                              00000000
+PDC1                              00000001
+PDC2                              00000002
+PDC3                              00000003
+PDC4                              00000004
+PDC5                              00000005
+PDC6                              00000006
+PEIE                              00000006
+PEN                               00000002
+PIE1                              0000008C
+PIE2                              0000008D
+PIR1                              0000000C
+PIR2                              0000000D
+PORTA                             00000005
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 29
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PORTB                             00000006
+PORTC                             00000007
+PORTD                             00000008
+PORTE                             00000009
+PR2                               00000092
+PRSEN                             00000007
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+PSSAC0                            00000002
+PSSAC1                            00000003
+PSSBD0                            00000000
+PSSBD1                            00000001
+PSTRCON                           0000009D
+PULSR                             00000002
+PULSS                             00000003
+PWM1CON                           0000009B
+PWMLoopDown                       0000005A
+PWMLoopUp                         00000067
+R                                 00000002
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RADC1                             0000001C
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+RBIE                              00000003
+RBIF                              00000000
+RC0                               00000000
+RC1                               00000001
+RC2                               00000002
+RC3                               00000003
+RC4                               00000004
+RC5                               00000005
+RC6                               00000006
+RC7                               00000007
+RC8_9                             00000006
+RC9                               00000006
+RCD8                              00000000
+RCEN                              00000003
+RCIDL                             00000006
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 30
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             0000001A
+RCSTA                             00000018
+RD                                00000000
+RD0                               00000000
+RD1                               00000001
+RD2                               00000002
+RD3                               00000003
+RD4                               00000004
+RD5                               00000005
+RD6                               00000006
+RD7                               00000007
+RE0                               00000000
+RE1                               00000001
+RE2                               00000002
+RE3                               00000003
+READ_WRITE                        00000002
+RP0                               00000005
+RP1                               00000006
+RSEN                              00000001
+RX9                               00000006
+RX9D                              00000000
+R_NOT_W                           00000002
+R_Old                             0000001F
+R_W                               00000002
+ReadADC                           0000001B
+S                                 00000003
+SBOREN                            00000004
+SCKP                              00000004
+SCS                               00000000
+SEN                               00000000
+SENDB                             00000003
+SMP                               00000007
+SPBRG                             00000099
+SPBRGH                            0000009A
+SPEN                              00000007
+SR0                               00000006
+SR1                               00000007
+SRCON                             00000185
+SREN                              00000005
+SSPADD                            00000093
+SSPBUF                            00000013
+SSPCON                            00000014
+SSPCON2                           00000091
+SSPEN                             00000005
+SSPIE                             00000003
+SSPIF                             00000003
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPMSK                            00000093
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 31
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSPOV                             00000006
+SSPSTAT                           00000094
+STATUS                            00000003
+STRA                              00000000
+STRB                              00000001
+STRC                              00000002
+STRD                              00000003
+STRSYNC                           00000004
+ST_TMP                            00000001
+SWDTEN                            00000000
+SYNC                              00000004
+S_Tmp                             00000020
+S_Tmp1                            00000021
+SampleTime                        00000024
+Sel0                              0000003A
+Sel1                              0000003D
+Sel2                              00000042
+Sel3                              00000045
+Sel4Rd                            0000002E
+SelBRd                            0000005B
+SelBut                            00000047
+SelL2                             00000060
+SelMSB1                           00000040
+Select4                           0000002C
+SelectB                           00000059
+SideToSideStrobe                  000000D3
+SideToSideStrobeConfig            0000011B
+SidetoSideConfig1                 00000011
+SidetoSideConfig2                 00000013
+SpeedSelectPWM                    00000007
+StrobeInit                        000000B5
+StrobeInitComplete                0000000E
+T0CS                              00000005
+T0IE                              00000005
+T0IF                              00000002
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000010
+T1GINV                            00000007
+T1GIV                             00000007
+T1GSS                             00000001
+T1INSYNC                          00000002
+T1OSCEN                           00000003
+T1SYNC                            00000002
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000012
+TMR0                              00000001
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR1                              0000000E
+TMR1CS                            00000001
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 32
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TMR1GE                            00000006
+TMR1H                             0000000F
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             0000000E
+TMR1ON                            00000000
+TMR2                              00000011
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TOUTPS0                           00000003
+TOUTPS1                           00000004
+TOUTPS2                           00000005
+TOUTPS3                           00000006
+TRISA                             00000085
+TRISA0                            00000000
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+TRISB                             00000086
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+TRISC                             00000087
+TRISC0                            00000000
+TRISC1                            00000001
+TRISC2                            00000002
+TRISC3                            00000003
+TRISC4                            00000004
+TRISC5                            00000005
+TRISC6                            00000006
+TRISC7                            00000007
+TRISD                             00000088
+TRISD0                            00000000
+TRISD1                            00000001
+TRISD2                            00000002
+TRISD3                            00000003
+TRISD4                            00000004
+TRISD5                            00000005
+TRISD6                            00000006
+TRISD7                            00000007
+TRISE                             00000089
+TRISE0                            00000000
+TRISE1                            00000001
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 33
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TRISE2                            00000002
+TRISE3                            00000003
+TRMT                              00000001
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TX8_9                             00000006
+TX9                               00000006
+TX9D                              00000000
+TXD8                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             00000019
+TXSTA                             00000098
+Temp                              00000000
+UA                                00000001
+ULPWUE                            00000005
+ULPWUIE                           00000002
+ULPWUIF                           00000002
+VCFG0                             00000004
+VCFG1                             00000005
+VR0                               00000000
+VR1                               00000001
+VR2                               00000002
+VR3                               00000003
+VRCON                             00000097
+VREN                              00000007
+VROE                              00000006
+VRR                               00000005
+VRSS                              00000004
+VariablePWM                       00000054
+VariablePWMConfig                 00000073
+VariablePWMConfig1                00000006
+VariablePWMConfig2                00000008
+VariablePWMConfig3                0000000A
+VariablePWMInit                   00000027
+VariablePWMInitComplete           00000005
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000105
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+WPUB                              00000095
+WPUB0                             00000000
+WPUB1                             00000001
+WPUB2                             00000002
+WPUB3                             00000003
+WPUB4                             00000004
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 34
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+WPUB5                             00000005
+WPUB6                             00000006
+WPUB7                             00000007
+WR                                00000001
+WREN                              00000002
+WRERR                             00000003
+WUE                               00000001
+W_TMP                             00000000
+Z                                 00000002
+_BOR21V                           00003EFF
+_BOR40V                           00003FFF
+_BOR4V_BOR21V                     00003EFF
+_BOR4V_BOR40V                     00003FFF
+_BOREN_NSLEEP                     00003EFF
+_BOREN_OFF                        00003CFF
+_BOREN_ON                         00003FFF
+_BOREN_SBODEN                     00003DFF
+_BOR_NSLEEP                       00003EFF
+_BOR_OFF                          00003CFF
+_BOR_ON                           00003FFF
+_BOR_SBODEN                       00003DFF
+_CONFIG1                          00002007
+_CONFIG2                          00002008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003F7F
+_CP_OFF                           00003FFF
+_CP_ON                            00003FBF
+_DEBUG_OFF                        00003FFF
+_DEBUG_ON                         00001FFF
+_DEVID1                           00002006
+_EC_OSC                           00003FFB
+_EXTRC                            00003FFF
+_EXTRCIO                          00003FFE
+_EXTRC_OSC_CLKOUT                 00003FFF
+_EXTRC_OSC_NOCLKOUT               00003FFE
+_FCMEN_OFF                        000037FF
+_FCMEN_ON                         00003FFF
+_FOSC_EC                          00003FFB
+_FOSC_EXTRC_CLKOUT                00003FFF
+_FOSC_EXTRC_NOCLKOUT              00003FFE
+_FOSC_HS                          00003FFA
+_FOSC_INTRC_CLKOUT                00003FFD
+_FOSC_INTRC_NOCLKOUT              00003FFC
+_FOSC_LP                          00003FF8
+_FOSC_XT                          00003FF9
+_HS_OSC                           00003FFA
+_IDLOC0                           00002000
+_IDLOC1                           00002001
+_IDLOC2                           00002002
+_IDLOC3                           00002003
+_IESO_OFF                         00003BFF
+_IESO_ON                          00003FFF
+_INTOSC                           00003FFD
+MPASM 5.87                       PROGRAM.ASM   5-5-2023  14:25:37         PAGE 35
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_INTOSCIO                         00003FFC
+_INTRC_OSC_CLKOUT                 00003FFD
+_INTRC_OSC_NOCLKOUT               00003FFC
+_ISR_004D                         0000004D
+_ISR_00CC                         000000CC
+_ISR_01DE                         000001DE
+_LP_OSC                           00003FF8
+_LVP_OFF                          00002FFF
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FDF
+_MCLRE_ON                         00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FEF
+_WDTE_OFF                         00003FF7
+_WDTE_ON                          00003FFF
+_WDT_OFF                          00003FF7
+_WDT_ON                           00003FFF
+_WRT_1FOURTH                      00003BFF
+_WRT_256                          00003DFF
+_WRT_HALF                         000039FF
+_WRT_OFF                          00003FFF
+_XT_OSC                           00003FF9
+__16F887                          00000001
+__DEBUG                           
+__MPLAB_DEBUGGER_SIMULATOR        1
+check_three                       000001EE
+check_two                         000001E8
+count                             0000000F
+current_direction                 00000015
+direction_select                  00000014
+led_pattern                       00000010
+loop1                             000000DC
+loop1end                          000000EB
+loop2                             000000EF
+loop2end                          000000FE
+loop3                             00000108
+poly                              00000018
+skipPre                           btfsc PORTB,RB0
+skipRel                           btfss PORTB,RB0
+speedSelect                       00000012
+xor                               00000141
+
+Errors   :     0
+Warnings :    46 reported,     0 suppressed
+Messages :    23 reported,     0 suppressed
+
+
